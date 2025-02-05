@@ -1,3 +1,4 @@
+import json
 import streamlit as st
 import pandas as pd
 import time
@@ -6,7 +7,7 @@ from openai import OpenAI
 import requests
 from openpyxl.styles import Font
 
-# ✅ 비밀번호 보호 기능 추가
+# ✅ 비밀번호 보호 기능
 def check_password():
     """비밀번호 입력이 올바른지 확인"""
     if "password_correct" not in st.session_state:
@@ -14,20 +15,22 @@ def check_password():
 
     if not st.session_state["password_correct"]:
         password = st.text_input("비밀번호를 입력하세요:", type="password")
-        if password == st.secrets["APP_PASSWORD"]:  # 원하는 비밀번호 설정
+
+        # 비밀번호를 Streamlit Secrets에서 불러오기
+        if password == st.secrets["APP_PASSWORD"]:  
             st.session_state["password_correct"] = True
         else:
             st.error("비밀번호가 틀렸습니다.")
             return False
     return True
 
-# ✅ 비밀번호가 맞으면 앱 실행
+# ✅ 비밀번호 확인 후 실행
 if check_password():
     st.title("단어 번역 및 예문 생성기")
     st.write("엑셀 파일을 업로드하면 단어에 대한 IPA 발음, 번역, 예문을 자동 생성합니다.")
 
-    # OpenAI API 키 설정
-    client = OpenAI(api_key="YOUR_OPENAI_API_KEY")
+    # ✅ OpenAI API 키를 Secrets에서 가져오기 (보안 강화)
+    client = OpenAI(api_key=st.secrets["OPENAI_API_KEY"])
 
     # 실시간 환율 가져오기
     def get_exchange_rate():
@@ -57,9 +60,9 @@ if check_password():
             response = client.chat.completions.create(
                 model="gpt-3.5-turbo",
                 messages=[
-                    {"role": "system", "content": "You are a helpful assistant. Always respond in JSON format: "
-                                                  '{"translations": [{"word": "<word>", "ipa": "<IPA pronunciation>", "korean": "<korean translations>", "example": "<short and simple English sentence for 3-4 year old toddlers>"}]}'},
-                    {"role": "user", "content": f"Provide IPA pronunciation, a list of Korean translations, and a very short and simple English sentence for 3-4 year old toddlers. Here are the words: {words_string}."}
+                    {"role": "system", "content": "You are a helpful assistant. Always respond in the following JSON format: "
+                                                  '{"translations": [{"word": "<word>", "ipa": "<IPA pronunciation>", "korean": "<korean translations (comma-separated)>", "example": "<very short and simple English sentence for 3-4 year old toddlers>"}]}'},
+                    {"role": "user", "content": f"Provide IPA pronunciation, a list of Korean translations, and a very short and simple English sentence for 3-4 year old toddlers. The sentence should be very easy, simple, and clear. Avoid difficult words. Use very basic grammar. Keep the sentence as short as possible. Here are the words: {words_string}."}
                 ]
             )
             output = response.choices[0].message.content.strip()
@@ -74,8 +77,11 @@ if check_password():
                 word = item.get("word", "").strip()
                 ipa = item.get("ipa", "발음 없음").strip()
                 ipa = ipa.replace("@", "ə")  
+
+                # "a"의 발음기호를 문맥에 맞게 자동 변환
                 if word.lower() == "a":
-                    ipa = "[ ə ]"  # "a"의 일반적인 약한 발음 적용
+                    ipa = "[ ə ]"  # 일반적인 문장에서 약한 발음으로 발음됨 (ex: "a cat")
+
                 ipa = f"[ {ipa.replace('/', '').strip()} ]" if ipa != "발음 없음" else "발음 없음"
                 korean = item.get("korean", "번역 없음").strip()
                 korean = korean.replace(" or ", ", ").replace(" ,", ",").strip()
@@ -93,9 +99,10 @@ if check_password():
             result_df.to_excel(writer, index=False)
         return output.getvalue()
 
-    # 파일 업로드 및 번역 실행
+    # Streamlit 앱 실행
     uploaded_file = st.file_uploader("엑셀 파일을 업로드하세요", type=["xlsx"])
 
+    # 세션 상태에 데이터가 없으면 초기화
     if "result_df" not in st.session_state:
         st.session_state.result_df = None
 
@@ -103,13 +110,13 @@ if check_password():
         df = pd.read_excel(uploaded_file, header=None)
         df = df.iloc[1:, :1]  
         df.columns = ["Word"]
-
+        
         word_count = len(df)
         total_tokens, usd_cost, krw_cost, exchange_rate, estimated_time = estimate_cost(word_count)
-
+        
         st.write("업로드된 데이터:")
         st.write(df)
-
+        
         st.subheader("예상 비용 및 시간")
         st.write(f"- 예상 토큰 수: {total_tokens}")
         st.write(f"- 예상 비용 (USD): ${usd_cost:.4f}")
@@ -128,10 +135,10 @@ if check_password():
                 batch_words = df["Word"].iloc[i:i + batch_size].tolist()
                 translations.extend(generate_batch_translations(batch_words))
                 progress_bar.progress(min((i + batch_size) / word_count, 1.0))
-
+            
             end_time = time.time()
             execution_time = end_time - start_time
-
+            
             st.write(f"실제 소요 시간: {execution_time:.2f} 초")
             st.session_state.result_df = pd.DataFrame(translations, columns=["Word", "IPA", "Korean", "Example Sentence"])
 
