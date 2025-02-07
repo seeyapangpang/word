@@ -3,5 +3,4 @@ pandas
 openai
 requests
 openpyxl
-pptx
 python-pptx
