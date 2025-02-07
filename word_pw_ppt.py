@@ -90,24 +90,34 @@ if check_password():
         except Exception as e:
             return [[word, "발음 없음", "번역 없음", "예문 오류", ""] for word in words]
 
-    # 파워포인트 생성 함수
-    def create_pptx(result_df):
-        prs = Presentation()
-        for _, row in result_df.iterrows():
-            slide = prs.slides.add_slide(prs.slide_layouts[5])  # 빈 슬라이드
-            title = slide.shapes.add_textbox(Inches(1), Inches(0.5), Inches(8), Inches(1))
-            title.text = row["Word"]
-            content = slide.shapes.add_textbox(Inches(1), Inches(2), Inches(8), Inches(5))
-            content.text = f"IPA: {row['IPA']}\n\n한글 번역: {row['Korean']}\n\n예문: {row['English Example']}\n한글 예문: {row['Korean Example']}"
-        output = BytesIO()
-        prs.save(output)
-        return output.getvalue()
-    
     # 세션 상태 초기화
     if "result_df" not in st.session_state:
         st.session_state.result_df = None
 
+    uploaded_file = st.file_uploader("엑셀 파일을 업로드하세요", type=["xlsx"])
+    if uploaded_file is not None:
+        df = pd.read_excel(uploaded_file, header=None)
+        df = df.iloc[1:, :1]  
+        df.columns = ["Word"]
+        st.session_state.result_df = pd.DataFrame(df, columns=["Word", "IPA", "Korean", "English Example", "Korean Example"])
+    
     if st.session_state.result_df is not None:
+        st.subheader("번역 및 예문 생성 결과")
+        st.write(st.session_state.result_df)
+
+        # 파워포인트 생성 및 다운로드 버튼 추가
+        def create_pptx(result_df):
+            prs = Presentation()
+            for _, row in result_df.iterrows():
+                slide = prs.slides.add_slide(prs.slide_layouts[5])  # 빈 슬라이드
+                title = slide.shapes.add_textbox(Inches(1), Inches(0.5), Inches(8), Inches(1))
+                title.text = row["Word"]
+                content = slide.shapes.add_textbox(Inches(1), Inches(2), Inches(8), Inches(5))
+                content.text = f"IPA: {row['IPA']}\n\n한글 번역: {row['Korean']}\n\n예문: {row['English Example']}\n한글 예문: {row['Korean Example']}"
+            output = BytesIO()
+            prs.save(output)
+            return output.getvalue()
+
         pptx_data = create_pptx(st.session_state.result_df)
         st.download_button(
             label="결과 다운로드 (파워포인트)",
