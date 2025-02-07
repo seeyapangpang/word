@@ -43,6 +43,12 @@ if check_password():
         except Exception:
             return 1300  # 오류 발생 시 기본 환율
 
+    # 세션 상태 초기화
+    if "result_df" not in st.session_state:
+        st.session_state.result_df = None
+    if "ppt_data" not in st.session_state:
+        st.session_state.ppt_data = None
+
     # 토큰 및 비용 계산 함수
     def estimate_cost(word_count, avg_example_length=50):
         token_per_word = 2  
@@ -121,10 +127,9 @@ if check_password():
 
         st.subheader("다음은 파워포인트 생성")
         if st.button("파워포인트 생성", key="ppt-generate"):
-            ppt_data = create_ppt(st.session_state.result_df)
-            st.session_state.ppt_data = ppt_data
+            st.session_state.ppt_data = create_ppt(st.session_state.result_df)
 
-        if "ppt_data" in st.session_state:
+        if st.session_state.ppt_data:
             st.download_button(
                 label="결과 다운로드 (PPTX)",
                 data=st.session_state.ppt_data,
