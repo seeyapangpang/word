@@ -119,12 +119,16 @@ if check_password():
             key="download-btn"
         )
 
-        st.subheader("파워포인트 생성")
-        if st.button("파워포인트 생성"):
+        st.subheader("다음은 파워포인트 생성")
+        if st.button("파워포인트 생성", key="ppt-generate"):
             ppt_data = create_ppt(st.session_state.result_df)
+            st.session_state.ppt_data = ppt_data
+
+        if "ppt_data" in st.session_state:
             st.download_button(
                 label="결과 다운로드 (PPTX)",
-                data=ppt_data,
+                data=st.session_state.ppt_data,
                 file_name="translated_vocabulary.pptx",
-                mime="application/vnd.openxmlformats-officedocument.presentationml.presentation"
+                mime="application/vnd.openxmlformats-officedocument.presentationml.presentation",
+                key="ppt-download-btn"
             )
