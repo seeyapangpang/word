@@ -49,6 +49,9 @@ if check_password():
     if "ppt_data" not in st.session_state:
         st.session_state.ppt_data = None
 
+    # 엑셀 파일 업로드
+    uploaded_file = st.file_uploader("엑셀 파일을 업로드하세요", type=["xlsx"])
+
     # 토큰 및 비용 계산 함수
     def estimate_cost(word_count, avg_example_length=50):
         token_per_word = 2  
