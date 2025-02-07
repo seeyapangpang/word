@@ -103,6 +103,10 @@ if check_password():
         prs.save(output)
         return output.getvalue()
     
+    # 세션 상태 초기화
+    if "result_df" not in st.session_state:
+        st.session_state.result_df = None
+
     if st.session_state.result_df is not None:
         pptx_data = create_pptx(st.session_state.result_df)
         st.download_button(
