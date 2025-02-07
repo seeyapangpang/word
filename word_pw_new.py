@@ -130,11 +130,19 @@ if check_password():
             end_time = time.time()
             execution_time = end_time - start_time
 
-            final_usd_cost = (total_tokens / 1000) * 0.0015
-            final_krw_cost = final_usd_cost * exchange_rate
-
             st.write(f"실제 소요 시간: {execution_time:.2f} 초")
-            st.write(f"- 최종 비용 (USD): ${final_usd_cost:.4f}")
-            st.write(f"- 최종 비용 (KRW): {final_krw_cost:,.0f}원")
             
             st.session_state.result_df = pd.DataFrame(translations, columns=["Word", "IPA", "Korean", "Combined Example", "English Example", "Korean Example"])
+
+    if st.session_state.result_df is not None:
+        st.subheader("번역 및 예문 생성 결과")
+        st.write(st.session_state.result_df)
+
+        excel_data = write_to_excel(st.session_state.result_df)
+        st.download_button(
+            label="결과 다운로드 (엑셀)",
+            data=excel_data,
+            file_name="translated_vocabulary.xlsx",
+            mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+            key="download-btn"
+        )
