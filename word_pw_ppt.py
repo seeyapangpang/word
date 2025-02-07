@@ -78,7 +78,21 @@ def generate_batch_translations(words, client, retries=3):
                 return [[word, "발음 없음", "번역 없음", "예문 오류", "예문 오류", "예문 오류"] for word in words]
 
 # ✅ 배치 크기 유지 (5)
-batch_size = 5
+batch_size = 10
+
+# ✅ 파워포인트 생성 함수
+def write_to_pptx(result_df):
+    prs = Presentation()
+    for _, row in result_df.iterrows():
+        slide = prs.slides.add_slide(prs.slide_layouts[5])
+        title = slide.shapes.title
+        title.text = row['Word']
+        textbox = slide.shapes.add_textbox(Inches(1), Inches(1.5), Inches(8), Inches(4.5))
+        text_frame = textbox.text_frame
+        text_frame.text = f"IPA: {row['IPA']}\n\nKorean: {row['Korean']}\n\nExample: {row['Combined Example']}"
+    output = BytesIO()
+    prs.save(output)
+    return output.getvalue()
 
 # ✅ 비밀번호 확인 후 실행
 if check_password():
@@ -118,9 +132,7 @@ if check_password():
 
             for i in range(0, word_count, batch_size):
                 batch_words = df["Word"].iloc[i:i + batch_size].tolist()
-                batch_result = generate_batch_translations(batch_words, client)
-                if batch_result:
-                    translations.extend(batch_result)
+                translations.extend(generate_batch_translations(batch_words, client))
                 progress_bar.progress(min((i + batch_size) / word_count, 1.0))
 
             end_time = time.time()
@@ -132,3 +144,11 @@ if check_password():
     if st.session_state.result_df is not None:
         st.subheader("번역 및 예문 생성 결과")
         st.write(st.session_state.result_df)
+        if st.button("결과 다운로드 (파워포인트)"):
+            pptx_data = write_to_pptx(st.session_state.result_df)
+            st.download_button(
+                label="파워포인트 다운로드",
+                data=pptx_data,
+                file_name="translated_vocabulary.pptx",
+                mime="application/vnd.openxmlformats-officedocument.presentationml.presentation"
+            )
