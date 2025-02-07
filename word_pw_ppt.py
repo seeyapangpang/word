@@ -44,54 +44,41 @@ def estimate_cost(word_count, avg_example_length=50):
     estimated_time = word_count * 0.2  
     return total_tokens, usd_cost, krw_cost, exchange_rate, estimated_time
 
-# ✅ 번역 및 예문 생성 함수
-def generate_batch_translations(words, client):
-    try:
-        words_string = json.dumps(words)  
-        response = client.chat.completions.create(
-            model="gpt-3.5-turbo",
-            messages=[
-                {"role": "system", "content": "You are a helpful assistant. Always respond in the following JSON format: "
-                                                 '{"translations": [{"word": "<word>", "ipa": "<IPA pronunciation>", "korean": "<korean translations>", "example": "<short English sentence>", "example_korean": "<Korean translation of the example>"}]}'},
-                {"role": "user", "content": f"Provide IPA pronunciation, a list of Korean translations, and a very short English sentence for toddlers along with its Korean translation. Here are the words: {words_string}."}
-            ]
-        )
-        output = response.choices[0].message.content.strip()
-        parsed_response = json.loads(output)
-        translations = []
-        for item in parsed_response.get("translations", []):
-            word = item.get("word", "").strip()
-            ipa = item.get("ipa", "발음 없음").strip()
-            ipa = f"[ {ipa.replace('/', '').strip()} ]" if ipa != "발음 없음" else "발음 없음"
-            korean = item.get("korean", "번역 없음").strip()
-            example = item.get("example", "No example available").strip()
-            example_korean = item.get("example_korean", "예문 없음").strip()
-            combined_example = f"{example} ({example_korean})"
-            translations.append([word, ipa, korean, combined_example, example, example_korean])
-        return translations
-    except Exception as e:
-        return [[word, "발음 없음", "번역 없음", "예문 오류", "예문 오류", "예문 오류"] for word in words]
+# ✅ 번역 및 예문 생성 함수 (배치 크기 조정 및 오류 처리 추가)
+def generate_batch_translations(words, client, retries=3):
+    for attempt in range(retries):
+        try:
+            words_string = json.dumps(words)  
+            response = client.chat.completions.create(
+                model="gpt-3.5-turbo",
+                messages=[
+                    {"role": "system", "content": "You are a helpful assistant. Always respond in the following JSON format: "
+                                                     '{"translations": [{"word": "<word>", "ipa": "<IPA pronunciation>", "korean": "<korean translations>", "example": "<short English sentence>", "example_korean": "<Korean translation of the example>"}]}'},
+                    {"role": "user", "content": f"Provide IPA pronunciation, a list of Korean translations, and a very short English sentence for toddlers along with its Korean translation. Here are the words: {words_string}."}
+                ]
+            )
+            output = response.choices[0].message.content.strip()
+            parsed_response = json.loads(output)
+            translations = []
+            for item in parsed_response.get("translations", []):
+                word = item.get("word", "").strip()
+                ipa = item.get("ipa", "발음 없음").strip()
+                ipa = f"[ {ipa.replace('/', '').strip()} ]" if ipa != "발음 없음" else "발음 없음"
+                korean = item.get("korean", "번역 없음").strip()
+                example = item.get("example", "No example available").strip()
+                example_korean = item.get("example_korean", "예문 없음").strip()
+                combined_example = f"{example} ({example_korean})"
+                translations.append([word, ipa, korean, combined_example, example, example_korean])
+            return translations
+        except Exception as e:
+            if attempt < retries - 1:
+                time.sleep(2)  # 재시도 전 대기
+                continue
+            else:
+                return [[word, "발음 없음", "번역 없음", "예문 오류", "예문 오류", "예문 오류"] for word in words]
 
-# ✅ 엑셀 파일 저장 함수
-def write_to_excel(result_df):
-    output = BytesIO()
-    with pd.ExcelWriter(output, engine="openpyxl") as writer:
-        result_df.to_excel(writer, index=False)
-    return output.getvalue()
-
-# ✅ 파워포인트 파일 저장 함수
-def write_to_pptx(result_df):
-    prs = Presentation()
-    for _, row in result_df.iterrows():
-        slide = prs.slides.add_slide(prs.slide_layouts[5])
-        title = slide.shapes.title
-        title.text = row['Word']
-        textbox = slide.shapes.add_textbox(Inches(1), Inches(1.5), Inches(8), Inches(4.5))
-        text_frame = textbox.text_frame
-        text_frame.text = f"IPA: {row['IPA']}\n\nKorean: {row['Korean']}\n\nExample: {row['Combined Example']}"
-    output = BytesIO()
-    prs.save(output)
-    return output.getvalue()
+# ✅ 배치 크기 유지 (5)
+batch_size = 5
 
 # ✅ 비밀번호 확인 후 실행
 if check_password():
@@ -127,12 +114,13 @@ if check_password():
             st.write("번역과 예문을 생성하는 중입니다...")
 
             translations = []
-            batch_size = 10
             progress_bar = st.progress(0)
 
             for i in range(0, word_count, batch_size):
                 batch_words = df["Word"].iloc[i:i + batch_size].tolist()
-                translations.extend(generate_batch_translations(batch_words, client))
+                batch_result = generate_batch_translations(batch_words, client)
+                if batch_result:
+                    translations.extend(batch_result)
                 progress_bar.progress(min((i + batch_size) / word_count, 1.0))
 
             end_time = time.time()
@@ -144,19 +132,3 @@ if check_password():
     if st.session_state.result_df is not None:
         st.subheader("번역 및 예문 생성 결과")
         st.write(st.session_state.result_df)
-
-        excel_data = write_to_excel(st.session_state.result_df)
-        st.download_button(
-            label="결과 다운로드 (엑셀)",
-            data=excel_data,
-            file_name="translated_vocabulary.xlsx",
-            mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
-        )
-
-        pptx_data = write_to_pptx(st.session_state.result_df)
-        st.download_button(
-            label="결과 다운로드 (파워포인트)",
-            data=pptx_data,
-            file_name="translated_vocabulary.pptx",
-            mime="application/vnd.openxmlformats-officedocument.presentationml.presentation"
-        )
