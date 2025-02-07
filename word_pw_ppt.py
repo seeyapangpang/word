@@ -77,8 +77,15 @@ def generate_batch_translations(words, client, retries=3):
             else:
                 return [[word, "발음 없음", "번역 없음", "예문 오류", "예문 오류", "예문 오류"] for word in words]
 
-# ✅ 배치 크기 유지 (5)
+# ✅ 배치 크기 유지 (10)
 batch_size = 10
+
+# ✅ 엑셀 생성 함수
+def write_to_excel(result_df):
+    output = BytesIO()
+    with pd.ExcelWriter(output, engine="openpyxl") as writer:
+        result_df.to_excel(writer, index=False)
+    return output.getvalue()
 
 # ✅ 파워포인트 생성 함수
 def write_to_pptx(result_df):
@@ -144,11 +151,15 @@ if check_password():
     if st.session_state.result_df is not None:
         st.subheader("번역 및 예문 생성 결과")
         st.write(st.session_state.result_df)
-        if st.button("결과 다운로드 (파워포인트)"):
-            pptx_data = write_to_pptx(st.session_state.result_df)
-            st.download_button(
-                label="파워포인트 다운로드",
-                data=pptx_data,
-                file_name="translated_vocabulary.pptx",
-                mime="application/vnd.openxmlformats-officedocument.presentationml.presentation"
-            )
+        st.download_button(
+            label="결과 다운로드 (엑셀)",
+            data=write_to_excel(st.session_state.result_df),
+            file_name="translated_vocabulary.xlsx",
+            mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+        )
+        st.download_button(
+            label="결과 다운로드 (파워포인트)",
+            data=write_to_pptx(st.session_state.result_df),
+            file_name="translated_vocabulary.pptx",
+            mime="application/vnd.openxmlformats-officedocument.presentationml.presentation"
+        )
