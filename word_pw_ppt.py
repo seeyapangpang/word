@@ -3,7 +3,7 @@ import streamlit as st
 import pandas as pd
 import time
 from io import BytesIO
-from openai import OpenAI
+import openai
 import requests
 from openpyxl.styles import Font
 from pptx import Presentation
@@ -32,7 +32,7 @@ if check_password():
     st.write("엑셀 파일을 업로드하면 단어에 대한 IPA 발음, 번역, 예문을 자동 생성합니다.")
 
     # ✅ OpenAI API 키를 Secrets에서 가져오기 (보안 강화)
-    client = OpenAI(api_key=st.secrets["OPENAI_API_KEY"])
+    openai.api_key = st.secrets["OPENAI_API_KEY"]
 
     # 실시간 환율 가져오기
     def get_exchange_rate():
@@ -43,23 +43,11 @@ if check_password():
         except Exception:
             return 1300  # 오류 발생 시 기본 환율
 
-    # 토큰 및 비용 계산 함수
-    def estimate_cost(word_count, avg_example_length=50):
-        token_per_word = 2  
-        token_per_example = avg_example_length * 1.2  
-        total_tokens = word_count * (token_per_word + token_per_example)
-        cost_per_1k_tokens = 0.0015  
-        usd_cost = (total_tokens / 1000) * cost_per_1k_tokens
-        exchange_rate = get_exchange_rate()
-        krw_cost = usd_cost * exchange_rate
-        estimated_time = word_count * 0.2  
-        return total_tokens, usd_cost, krw_cost, exchange_rate, estimated_time
-
     # 번역 및 예문 생성 함수
     def generate_batch_translations(words):
         try:
             words_string = json.dumps(words)  
-            response = client.chat.completions.create(
+            response = openai.ChatCompletion.create(
                 model="gpt-3.5-turbo",
                 messages=[
                     {"role": "system", "content": "You are a helpful assistant. Always respond in the following JSON format: "
@@ -67,7 +55,7 @@ if check_password():
                     {"role": "user", "content": f"Provide IPA pronunciation, a list of Korean translations, and a very short English sentence for toddlers along with its Korean translation. Here are the words: {words_string}."}
                 ]
             )
-            output = response.choices[0].message.content.strip()
+            output = response["choices"][0]["message"]["content"].strip()
 
             parsed_response = json.loads(output)
             translations = []
@@ -88,6 +76,7 @@ if check_password():
             
             return translations
         except Exception as e:
+            st.error(f"API 오류 발생: {str(e)}")
             return [[word, "발음 없음", "번역 없음", "예문 오류", ""] for word in words]
 
     # 세션 상태 초기화
