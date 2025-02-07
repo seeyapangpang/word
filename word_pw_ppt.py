@@ -71,6 +71,27 @@ def generate_batch_translations(words, client):
     except Exception as e:
         return [[word, "발음 없음", "번역 없음", "예문 오류", "예문 오류"] for word in words]
 
+# ✅ 엑셀 파일 저장 함수
+def write_to_excel(result_df):
+    output = BytesIO()
+    with pd.ExcelWriter(output, engine="openpyxl") as writer:
+        result_df.to_excel(writer, index=False)
+    return output.getvalue()
+
+# ✅ 파워포인트 파일 저장 함수
+def write_to_pptx(result_df):
+    prs = Presentation()
+    for _, row in result_df.iterrows():
+        slide = prs.slides.add_slide(prs.slide_layouts[5])
+        title = slide.shapes.title
+        title.text = row['Word']
+        textbox = slide.shapes.add_textbox(Inches(1), Inches(1.5), Inches(8), Inches(4.5))
+        text_frame = textbox.text_frame
+        text_frame.text = f"IPA: {row['IPA']}\n\nKorean: {row['Korean']}\n\nExample: {row['English Example']}\n{row['Korean Example']}"
+    output = BytesIO()
+    prs.save(output)
+    return output.getvalue()
+
 # ✅ 비밀번호 확인 후 실행
 if check_password():
     st.title("단어 번역 및 예문 생성기")
