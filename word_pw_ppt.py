@@ -66,31 +66,11 @@ def generate_batch_translations(words, client):
             korean = item.get("korean", "번역 없음").strip()
             example = item.get("example", "No example available").strip()
             example_korean = item.get("example_korean", "예문 없음").strip()
-            translations.append([word, ipa, korean, example, example_korean])
+            combined_example = f"{example} ({example_korean})."
+            translations.append([word, ipa, korean, combined_example, example, example_korean])
         return translations
     except Exception as e:
-        return [[word, "발음 없음", "번역 없음", "예문 오류", "예문 오류"] for word in words]
-
-# ✅ 엑셀 파일 저장 함수
-def write_to_excel(result_df):
-    output = BytesIO()
-    with pd.ExcelWriter(output, engine="openpyxl") as writer:
-        result_df.to_excel(writer, index=False)
-    return output.getvalue()
-
-# ✅ 파워포인트 파일 저장 함수
-def write_to_pptx(result_df):
-    prs = Presentation()
-    for _, row in result_df.iterrows():
-        slide = prs.slides.add_slide(prs.slide_layouts[5])
-        title = slide.shapes.title
-        title.text = row['Word']
-        textbox = slide.shapes.add_textbox(Inches(1), Inches(1.5), Inches(8), Inches(4.5))
-        text_frame = textbox.text_frame
-        text_frame.text = f"IPA: {row['IPA']}\n\nKorean: {row['Korean']}\n\nExample: {row['English Example']}\n{row['Korean Example']}"
-    output = BytesIO()
-    prs.save(output)
-    return output.getvalue()
+        return [[word, "발음 없음", "번역 없음", "예문 오류", "", ""] for word in words]
 
 # ✅ 비밀번호 확인 후 실행
 if check_password():
@@ -138,7 +118,7 @@ if check_password():
             execution_time = end_time - start_time
             st.write(f"실제 소요 시간: {execution_time:.2f} 초")
             
-            st.session_state.result_df = pd.DataFrame(translations, columns=["Word", "IPA", "Korean", "English Example", "Korean Example"])
+            st.session_state.result_df = pd.DataFrame(translations, columns=["Word", "IPA", "Korean", "Combined Example", "English Example", "Korean Example"])
 
     if st.session_state.result_df is not None:
         st.subheader("번역 및 예문 생성 결과")
