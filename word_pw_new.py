@@ -72,6 +72,8 @@ if check_password():
             for item in parsed_response.get("translations", []):
                 word = item.get("word", "").strip()
                 ipa = item.get("ipa", "발음 없음").strip()
+                ipa = ipa.replace("@", "ə")  # 발음 기호 형식 유지
+                ipa = f"[ {ipa.replace('/', '').strip()} ]" if ipa != "발음 없음" else "발음 없음"
                 korean = item.get("korean", "번역 없음").strip()
                 example = item.get("example", "No example available").strip()
                 example_korean = item.get("example_korean", "예문 없음").strip()
