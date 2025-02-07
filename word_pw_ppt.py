@@ -44,31 +44,39 @@ def estimate_cost(word_count, avg_example_length=50):
     estimated_time = word_count * 0.2  
     return total_tokens, usd_cost, krw_cost, exchange_rate, estimated_time
 
+# ✅ 번역 및 예문 생성 함수
+def generate_batch_translations(words, client):
+    try:
+        words_string = json.dumps(words)  
+        response = client.chat.completions.create(
+            model="gpt-3.5-turbo",
+            messages=[
+                {"role": "system", "content": "You are a helpful assistant. Always respond in the following JSON format: "
+                                                 '{"translations": [{"word": "<word>", "ipa": "<IPA pronunciation>", "korean": "<korean translations>", "example": "<short English sentence>", "example_korean": "<Korean translation of the example>"}]}'},
+                {"role": "user", "content": f"Provide IPA pronunciation, a list of Korean translations, and a very short English sentence for toddlers along with its Korean translation. Here are the words: {words_string}."}
+            ]
+        )
+        output = response.choices[0].message.content.strip()
+        parsed_response = json.loads(output)
+        translations = []
+        for item in parsed_response.get("translations", []):
+            word = item.get("word", "").strip()
+            ipa = item.get("ipa", "발음 없음").strip()
+            ipa = f"[ {ipa.replace('/', '').strip()} ]" if ipa != "발음 없음" else "발음 없음"
+            korean = item.get("korean", "번역 없음").strip()
+            example = item.get("example", "No example available").strip()
+            example_korean = item.get("example_korean", "예문 없음").strip()
+            translations.append([word, ipa, korean, example, example_korean])
+        return translations
+    except Exception as e:
+        return [[word, "발음 없음", "번역 없음", "예문 오류", "예문 오류"] for word in words]
+
 # ✅ 비밀번호 확인 후 실행
 if check_password():
     st.title("단어 번역 및 예문 생성기")
     st.write("엑셀 파일을 업로드하면 단어에 대한 IPA 발음, 번역, 예문을 자동 생성합니다.")
 
     client = OpenAI(api_key=st.secrets["OPENAI_API_KEY"])
-
-    def write_to_excel(result_df):
-        output = BytesIO()
-        with pd.ExcelWriter(output, engine="openpyxl") as writer:
-            result_df.to_excel(writer, index=False)
-        return output.getvalue()
-
-    def write_to_pptx(result_df):
-        prs = Presentation()
-        for _, row in result_df.iterrows():
-            slide = prs.slides.add_slide(prs.slide_layouts[5])
-            title = slide.shapes.title
-            title.text = row['Word']
-            textbox = slide.shapes.add_textbox(Inches(1), Inches(1.5), Inches(8), Inches(4.5))
-            text_frame = textbox.text_frame
-            text_frame.text = f"IPA: {row['IPA']}\n\nKorean: {row['Korean']}\n\nExample: {row['English Example']}\n{row['Korean Example']}"
-        output = BytesIO()
-        prs.save(output)
-        return output.getvalue()
 
     uploaded_file = st.file_uploader("엑셀 파일을 업로드하세요", type=["xlsx"])
 
@@ -102,15 +110,14 @@ if check_password():
 
             for i in range(0, word_count, batch_size):
                 batch_words = df["Word"].iloc[i:i + batch_size].tolist()
-                translations.extend([[word, "[ ə ]", "번역 예시", "Example sentence (예문)", "Example sentence", "예문"] for word in batch_words])
+                translations.extend(generate_batch_translations(batch_words, client))
                 progress_bar.progress(min((i + batch_size) / word_count, 1.0))
 
             end_time = time.time()
             execution_time = end_time - start_time
-
             st.write(f"실제 소요 시간: {execution_time:.2f} 초")
             
-            st.session_state.result_df = pd.DataFrame(translations, columns=["Word", "IPA", "Korean", "Combined Example", "English Example", "Korean Example"])
+            st.session_state.result_df = pd.DataFrame(translations, columns=["Word", "IPA", "Korean", "English Example", "Korean Example"])
 
     if st.session_state.result_df is not None:
         st.subheader("번역 및 예문 생성 결과")
