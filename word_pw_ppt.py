@@ -44,7 +44,7 @@ def estimate_cost(word_count, avg_example_length=50):
     estimated_time = word_count * 0.2  
     return total_tokens, usd_cost, krw_cost, exchange_rate, estimated_time
 
-# ✅ 번역 및 예문 생성 함수 (배치 크기 조정 및 오류 처리 추가)
+# ✅ 번역 및 예문 생성 함수 (3번 재시도 로직 추가)
 def generate_batch_translations(words, client, retries=3):
     for attempt in range(retries):
         try:
@@ -53,7 +53,7 @@ def generate_batch_translations(words, client, retries=3):
                 model="gpt-3.5-turbo",
                 messages=[
                     {"role": "system", "content": "You are a helpful assistant. Always respond in the following JSON format: "
-                                                     '{"translations": [{"word": "<word>", "ipa": "<IPA pronunciation>", "korean": "<korean translations>", "example": "<short English sentence>", "example_korean": "<Korean translation of the example>"}]}'},
+                                                         '{"translations": [{"word": "<word>", "ipa": "<IPA pronunciation>", "korean": "<korean translations>", "example": "<short English sentence>", "example_korean": "<Korean translation of the example>"}]}'},
                     {"role": "user", "content": f"Provide IPA pronunciation, a list of Korean translations, and a very short English sentence for toddlers along with its Korean translation. Here are the words: {words_string}."}
                 ]
             )
@@ -147,19 +147,3 @@ if check_password():
             st.write(f"실제 소요 시간: {execution_time:.2f} 초")
             
             st.session_state.result_df = pd.DataFrame(translations, columns=["Word", "IPA", "Korean", "Combined Example", "English Example", "Korean Example"])
-
-    if st.session_state.result_df is not None:
-        st.subheader("번역 및 예문 생성 결과")
-        st.write(st.session_state.result_df)
-        st.download_button(
-            label="결과 다운로드 (엑셀)",
-            data=write_to_excel(st.session_state.result_df),
-            file_name="translated_vocabulary.xlsx",
-            mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
-        )
-        st.download_button(
-            label="결과 다운로드 (파워포인트)",
-            data=write_to_pptx(st.session_state.result_df),
-            file_name="translated_vocabulary.pptx",
-            mime="application/vnd.openxmlformats-officedocument.presentationml.presentation"
-        )
