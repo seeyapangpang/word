@@ -59,17 +59,14 @@ def generate_batch_translations(words, client, retries=3):
             )
             output = response.choices[0].message.content.strip()
             parsed_response = json.loads(output)
-            translations = []
-            for item in parsed_response.get("translations", []):
-                word = item.get("word", "").strip()
-                ipa = item.get("ipa", "발음 없음").strip()
-                ipa = f"[ {ipa.replace('/', '').strip()} ]" if ipa != "발음 없음" else "발음 없음"
-                korean = item.get("korean", "번역 없음").strip()
-                example = item.get("example", "No example available").strip()
-                example_korean = item.get("example_korean", "예문 없음").strip()
-                combined_example = f"{example} ({example_korean})"
-                translations.append([word, ipa, korean, combined_example, example, example_korean])
-            return translations
+            return [[
+                item.get("word", "").strip(),
+                f"[ {item.get('ipa', '발음 없음').replace('/', '').strip()} ]" if item.get("ipa", "발음 없음") != "발음 없음" else "발음 없음",
+                item.get("korean", "번역 없음").strip(),
+                f"{item.get('example', 'No example available').strip()} ({item.get('example_korean', '예문 없음').strip()})",
+                item.get("example", "No example available").strip(),
+                item.get("example_korean", "예문 없음").strip()
+            ] for item in parsed_response.get("translations", [])]
         except Exception as e:
             if attempt < retries - 1:
                 time.sleep(2)  # 재시도 전 대기
@@ -79,71 +76,3 @@ def generate_batch_translations(words, client, retries=3):
 
 # ✅ 배치 크기 유지 (10)
 batch_size = 10
-
-# ✅ 엑셀 생성 함수
-def write_to_excel(result_df):
-    output = BytesIO()
-    with pd.ExcelWriter(output, engine="openpyxl") as writer:
-        result_df.to_excel(writer, index=False)
-    return output.getvalue()
-
-# ✅ 파워포인트 생성 함수
-def write_to_pptx(result_df):
-    prs = Presentation()
-    for _, row in result_df.iterrows():
-        slide = prs.slides.add_slide(prs.slide_layouts[5])
-        title = slide.shapes.title
-        title.text = row['Word']
-        textbox = slide.shapes.add_textbox(Inches(1), Inches(1.5), Inches(8), Inches(4.5))
-        text_frame = textbox.text_frame
-        text_frame.text = f"IPA: {row['IPA']}\n\nKorean: {row['Korean']}\n\nExample: {row['Combined Example']}"
-    output = BytesIO()
-    prs.save(output)
-    return output.getvalue()
-
-# ✅ 비밀번호 확인 후 실행
-if check_password():
-    st.title("단어 번역 및 예문 생성기")
-    st.write("엑셀 파일을 업로드하면 단어에 대한 IPA 발음, 번역, 예문을 자동 생성합니다.")
-
-    client = OpenAI(api_key=st.secrets["OPENAI_API_KEY"])
-
-    uploaded_file = st.file_uploader("엑셀 파일을 업로드하세요", type=["xlsx"])
-
-    if "result_df" not in st.session_state:
-        st.session_state.result_df = None
-
-    if uploaded_file is not None:
-        df = pd.read_excel(uploaded_file, header=None)
-        df = df.iloc[1:, :1]
-        df.columns = ["Word"]
-
-        word_count = len(df)
-        total_tokens, usd_cost, krw_cost, exchange_rate, estimated_time = estimate_cost(word_count)
-
-        st.write("업로드된 데이터:")
-        st.write(df)
-
-        st.subheader("예상 비용 및 시간")
-        st.write(f"- 예상 토큰 수: {total_tokens}")
-        st.write(f"- 예상 비용 (USD): ${usd_cost:.4f}")
-        st.write(f"- 예상 비용 (KRW): {krw_cost:,.0f}원 (환율: {exchange_rate:.2f} KRW/USD)")
-        st.write(f"- 예상 시간: {estimated_time:.2f} 초")
-
-        if st.button("Go (API 요청 시작)"):
-            start_time = time.time()
-            st.write("번역과 예문을 생성하는 중입니다...")
-
-            translations = []
-            progress_bar = st.progress(0)
-
-            for i in range(0, word_count, batch_size):
-                batch_words = df["Word"].iloc[i:i + batch_size].tolist()
-                translations.extend(generate_batch_translations(batch_words, client))
-                progress_bar.progress(min((i + batch_size) / word_count, 1.0))
-
-            end_time = time.time()
-            execution_time = end_time - start_time
-            st.write(f"실제 소요 시간: {execution_time:.2f} 초")
-            
-            st.session_state.result_df = pd.DataFrame(translations, columns=["Word", "IPA", "Korean", "Combined Example", "English Example", "Korean Example"])
