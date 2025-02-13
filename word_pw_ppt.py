@@ -163,5 +163,3 @@ if check_password():
             file_name="translated_vocabulary.pptx",
             mime="application/vnd.openxmlformats-officedocument.presentationml.presentation"
         )
-
-이 코딩을 그대로 유지하려고해. 그런데 api를 받는 과정에서 데이터를 못 받는 경우도 생기더라구. 이를 ㄹ방지하기 위해 3번까지 요청하는 것으로 해줘 
