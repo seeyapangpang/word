@@ -76,3 +76,24 @@ def generate_batch_translations(words, client, retries=3):
 
 # ✅ 배치 크기 유지 (10)
 batch_size = 10
+
+# ✅ 엑셀 생성 함수
+def write_to_excel(result_df):
+    output = BytesIO()
+    with pd.ExcelWriter(output, engine="openpyxl") as writer:
+        result_df.to_excel(writer, index=False)
+    return output.getvalue()
+
+# ✅ 파워포인트 생성 함수
+def write_to_pptx(result_df):
+    prs = Presentation()
+    for _, row in result_df.iterrows():
+        slide = prs.slides.add_slide(prs.slide_layouts[5])
+        title = slide.shapes.title
+        title.text = row['Word']
+        textbox = slide.shapes.add_textbox(Inches(1), Inches(1.5), Inches(8), Inches(4.5))
+        text_frame = textbox.text_frame
+        text_frame.text = f"IPA: {row['IPA']}\n\nKorean: {row['Korean']}\n\nExample: {row['Combined Example']}"
+    output = BytesIO()
+    prs.save(output)
+    return output.getvalue()
